@@ -1,0 +1,22 @@
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    text-align: center;
+    background-color: #2C2F35;
+    color: #BFBFBF;
+}
+
+#reportList {
+    text-align: left;
+    padding-top: 1em;
+}
+
+.report {
+    padding-bottom: 1em;
+
+    width: 50%;
+    margin: auto;
+
+    border-bottom: 1px;
+    border-bottom-style: solid;
+    border-bottom-color: black;
+}

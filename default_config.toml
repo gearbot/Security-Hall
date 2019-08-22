@@ -1,0 +1,18 @@
+# This is used as a display name on the records page
+project_name = "Default Project"
+
+# The path that logs will be written to, ensure the account running the service has proper perms, etc.
+logging_dir = "./logs/"
+
+# See the Rust `log` library for more logging level options
+logging_level = "info"
+
+[server]
+ip = "127.0.0.1"
+port = 8080
+
+# By default, the admin REST interface is disabled for security. To enable it, uncomment the block below
+# To add more users, just add more [[admin_keys]] blocks below.
+# [[admin_keys]]
+# username = "DefaultAdmin"
+# key = "GENERATE_A_KEY_HERE"

@@ -1,0 +1,23 @@
+<head>
+    <link rel="stylesheet" type="text/css" href="/static/style.css">
+</head>
+
+<h1>Acknowledgements</h1>
+<p>This page lists all security incidents of {{project_name}}</p>
+<div id="reportList">
+    {% for report in reports %}
+    <div class="report">
+        <h4 class="date">{{ report.date }}</h4>
+        <p class="affectedService"> Affected: {{ report.affected_service }}</p>
+
+        {% match report.reporter_handle %}
+            {% when Some with (reporter_handle) %}
+                <p class="reporter">Reporter: {{ report.reporter }} ({{ reporter_handle }})</p>
+            {% when None %}
+                <p class="reporter">Reporter: {{ report.reporter }}</p>
+        {% endmatch %}
+        
+        <p class="summary">{{ report.summary }}</p>
+    </div>
+    {% endfor %}
+</div>

@@ -1,0 +1,11 @@
+/target
+**/*.rs.bk
+
+# Default logging directory
+logs/
+
+# Records DB
+records/
+
+# Config / Admin keys
+config.toml
