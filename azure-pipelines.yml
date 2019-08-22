@@ -1,0 +1,95 @@
+# Security Hall of Fame Azure build pipeline
+trigger:
+- master
+
+stages:
+- stage: Tests
+  jobs: 
+  - job: check_clippy
+    displayName: Clippy
+
+    pool:
+      vmImage: 'ubuntu-latest'
+
+    steps:
+    - template: ci/installrust.yml
+    - script: rustup component add clippy
+      displayName: Install Clippy
+    - script: cargo clippy --all -- -D clippy::all
+      displayName: Clippy Tests
+    
+  - job: cargo_check
+      displayName: Cargo Check
+      
+    pool:
+      vmImage: 'ubuntu-latest'
+    
+    steps:
+    - template: ci/installrust.yml
+    - script: cargo check --all --bins
+      displayName: Cargo Check Tests
+
+
+- stage: Build
+  dependsOn: Test
+  condition: succeeded()
+
+  jobs:
+  - job: build_rust
+    displayName: Rust Stable Build
+
+    strategy:
+      matrix:
+        windows-stable:
+          imageName: 'vs2017-win2016'
+          rustup_toolchain: stable
+        windows-nightly:
+          imageName: 'vs2017-win2016'
+          rustup_toolchain: nightly
+
+        linux-stable:
+          imageName: 'ubuntu-latest'
+          rustup_toolchain: stable
+        linux-nightly:
+          imageName: 'ubuntu-latest'
+          rustup_toolchain: nightly
+    
+        mac-stable:
+          imageName: 'macos-10.13'
+          rustup_toolchain: stable
+    
+    pool:
+      vmImage: $(imageName)
+
+    steps:
+    - template: ci/installrust.yml
+      parameters:
+        rust_toolchain: $(rustup_toolchain)
+    - script: cargo rustc --release -- -C lto -C link-args=-s
+      displayName: Hall Compilation
+
+      # Artifacts are needed for the startup test, even on PRs
+    - task: PublishPipelineArtifact@0
+      condition: and(succeeded(), eq(variables['Agent.OS'], 'Linux'))
+      inputs:
+        artifactName: 'security_hall'
+        targetPath: './target/release/security_hall'
+
+  - job: startup_test
+    displayName: Security Hall Startup Test
+
+    pool:
+      vmImage: 'ubuntu-latest'
+
+    steps:
+      - task: DownloadPipelineArtifact@1
+        displayName: Download Security Hall Binary
+        inputs:
+          buildType: 'current'
+          artifactName: 'security_hall'
+          targetPath: '$(Agent.TempDirectory)'
+
+      - script: 'chmod +x ./security_hall; ./security_hall & last_pid=$!; sleep 5; kill -s TERM $last_pid'
+        displayName: Security Hall Startup Panic Test
+        workingDirectory: '$(Agent.TempDirectory)'
+        failOnStderr: 'true'
