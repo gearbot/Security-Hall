@@ -17,12 +17,18 @@ pub fn add_record(new_record: RecordSubmission, user: &AdminKey, record_db: &Db)
 
     // Assign this with a predictable key
     let key = format!("SI-{}", new_id);
+    
+    // Let the user optionally define a record date, default to today
+    let record_date = match new_record.date {
+        Some(submitted_date) => submitted_date,
+        None => Utc::today().naive_utc()
+    };
 
     let formed_record = HallEntry {
         id: new_id,
         reference_id: new_record.reference_id,
         affected_service: new_record.affected_service,
-        date: Utc::today().naive_utc(),
+        date: record_date,
         summary: new_record.summary,
         reporter: new_record.reporter,
         reporter_handle: new_record.reporter_handle

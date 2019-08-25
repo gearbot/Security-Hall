@@ -58,6 +58,8 @@ pub struct RecordSubmission {
     id: Option<u64>,
     reference_id: u64,
     affected_service: String,
+    // This is submitted in the form of Y-M-D
+    date: Option<NaiveDate>,
     summary: String,
     reporter: String,
     reporter_handle: Option<String>,
