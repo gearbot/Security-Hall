@@ -1,0 +1,20 @@
+# Currently these break due to file permissions and attributes being reset after a cache restore.
+# These will be included when Azure Pipeline's caching comes along further.
+
+variables:
+  CARGO_CACHE_FOLDER: $(System.DefaultWorkingDirectory)/target
+
+- task: CacheBeta@0
+      displayName: Apply Cargo Cache
+      inputs:
+        key: 'cargo_build | $(Agent.OS) | Cargo.lock'
+        path: $(CARGO_CACHE_FOLDER)
+
+
+- task: CacheBeta@0
+      # Don't get a build cache from stable on Nightly, Cargo will just rebuild everything anyway
+      condition: not(endsWith(variables['Agent.JobName'], 'Nightly'))
+      displayName: Restore Previous Cargo Build Cache
+      inputs:
+        key: 'cargo_build_opt | $(Agent.OS) | Cargo.lock'
+        path: $(CARGO_CACHE_FOLDER)

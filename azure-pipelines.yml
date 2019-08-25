@@ -2,6 +2,10 @@
 trigger:
 - master
 
+
+variables:
+- group: DiscordWebhook-DeploymentMonitoring
+
 stages:
 - stage: Tests
   jobs: 
@@ -13,51 +17,33 @@ stages:
 
     steps:
     - template: ci/installrust.yml
+
     - script: rustup component add clippy
       displayName: Install Clippy
+
     - script: cargo clippy --all -- -D clippy::all
-      displayName: Clippy Tests
+      displayName: Clippy Check
     
   - job: cargo_check
-      displayName: Cargo Check
-      
-    pool:
-      vmImage: 'ubuntu-latest'
+    displayName: Cargo Check
+    dependsOn: check_clippy
     
-    steps:
-    - template: ci/installrust.yml
-    - script: cargo check --all --bins
-      displayName: Cargo Check Tests
-
-
-- stage: Build
-  dependsOn: Test
-  condition: succeeded()
-
-  jobs:
-  - job: build_rust
-    displayName: Rust Stable Build
-
     strategy:
       matrix:
-        windows-stable:
+        Windows Stable:
           imageName: 'vs2017-win2016'
           rustup_toolchain: stable
-        windows-nightly:
+        Windows Nightly:
           imageName: 'vs2017-win2016'
           rustup_toolchain: nightly
 
-        linux-stable:
+        Linux Stable:
           imageName: 'ubuntu-latest'
           rustup_toolchain: stable
-        linux-nightly:
+        Linux Nightly:
           imageName: 'ubuntu-latest'
           rustup_toolchain: nightly
-    
-        mac-stable:
-          imageName: 'macos-10.13'
-          rustup_toolchain: stable
-    
+      
     pool:
       vmImage: $(imageName)
 
@@ -65,31 +51,119 @@ stages:
     - template: ci/installrust.yml
       parameters:
         rust_toolchain: $(rustup_toolchain)
-    - script: cargo rustc --release -- -C lto -C link-args=-s
-      displayName: Hall Compilation
 
-      # Artifacts are needed for the startup test, even on PRs
-    - task: PublishPipelineArtifact@0
-      condition: and(succeeded(), eq(variables['Agent.OS'], 'Linux'))
-      inputs:
-        artifactName: 'security_hall'
-        targetPath: './target/release/security_hall'
+    - script: cargo check --all --bins
+      displayName: Cargo Check
 
-  - job: startup_test
-    displayName: Security Hall Startup Test
+
+- stage: Build
+  dependsOn: Tests
+  condition: succeeded()
+
+  jobs:
+  - job: build_release
+    displayName: Build Release
 
     pool:
       vmImage: 'ubuntu-latest'
 
     steps:
+    - template: ci/installrust.yml
+
+    - script: cargo rustc --release -- -C lto -C link-args=-s
+      displayName: Release Compile
+
+    # Artifacts are needed for the startup test, even on PRs
+    - task: PublishPipelineArtifact@0
+      condition: succeeded()
+      inputs:
+        artifactName: 'security_hall'
+        targetPath: './target/release/security_hall'
+
+  - job: startup_test
+    displayName: Startup Test
+    dependsOn: build_release
+    condition: succeeded()
+
+    pool:
+      vmImage: 'ubuntu-latest'
+
+    steps:
+      - script: cp default_config.toml config.toml
+        displayName: Create config
+
       - task: DownloadPipelineArtifact@1
-        displayName: Download Security Hall Binary
+        displayName: Download Binary
         inputs:
           buildType: 'current'
           artifactName: 'security_hall'
-          targetPath: '$(Agent.TempDirectory)'
+          targetPath: '$(System.DefaultWorkingDirectory)'
 
-      - script: 'chmod +x ./security_hall; ./security_hall & last_pid=$!; sleep 5; kill -s TERM $last_pid'
-        displayName: Security Hall Startup Panic Test
-        workingDirectory: '$(Agent.TempDirectory)'
-        failOnStderr: 'true'
+      - script: |
+          chmod +x ./security_hall
+          RESULTS=`./security_hall & last_pid=$!; sleep 5; kill -s TERM $last_pid`
+          echo "##vso[task.setvariable variable=startupResult;]$RESULTS"
+        displayName: Startup Panic Test
+        
+      - script: 'echo $(startupResult); exit 1'
+        displayName: Startup failure
+        condition: contains(variables['startupResult'], 'thread')
+
+      - script: rm -rf config.toml ./records ./logs
+        displayName: Clean repo contents
+
+      - task: PublishPipelineArtifact@1
+        displayName: Generate deploy files
+        condition: succeeded()
+        inputs:
+          targetPath: '$(System.DefaultWorkingDirectory)'
+          artifact: 'DeployFiles'
+
+
+- stage: Deploy
+  dependsOn: Build
+  condition: and(succeeded(), ne(variables['build.reason'], 'PullRequest'))
+
+  jobs:
+    - deployment: deploy_to_vm
+      displayName: Deploy to VM
+      environment: Production
+
+      pool:
+        vmImage: 'ubuntu-latest'
+
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+            - task: DownloadPipelineArtifact@1
+              displayName: Download deploy files
+              inputs:
+                buildType: 'current'
+                artifactName: 'DeployFiles'
+                targetPath: '$(System.DefaultWorkingDirectory)'
+            
+            - task: SSH@0
+              displayName: Stop Service
+              inputs:
+                sshEndpoint: 'GearBox'
+                runOptions: 'commands'
+                commands: 'sudo systemctl stop securityhall.service'
+            
+            - task: CopyFilesOverSSH@0
+              displayName: Copy deployment to VM
+              inputs:
+                sshEndpoint: 'GearBox'
+                contents: '**'
+                targetFolder: './security_hall/'
+                failOnEmptySource: true
+
+            - task: SSH@0
+              displayName: Start Service
+              inputs:
+                sshEndpoint: 'GearBox'
+                runOptions: 'commands'
+                commands: 'chmod +x ./security_hall/security_hall; sudo systemctl start securityhall.service'
+            
+            # Notify admins via Discord of the deployment
+            - template: ci/discordnotify.yml
