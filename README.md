@@ -14,21 +14,21 @@ To add, remove, or update reports inside the record store, the admin REST API is
 
 By default the interface is disabled, but can easily be enabled by uncommenting the bottom section of the config file. All requests to the API must include an `application/json` header and then a `Authorization` header that contains a key registered in the config. To see the structure of record addition/updating, see below (Any values with `Option<>` around them aren't required):
 
+### Field Specific Details
+- `id` is only used when updating a record to select a record, it is ignored elsewhere. IDs can be found under the `/admin/list` endpoint.
+- `reference_id` is purely for arbitrary internal use, maybe relating to to a writeup. It is not publically visible.
+- `date` is optional, submitted in the form of `Y-M-D`. If not present, the current system date will be used.
+- `reporter_handle` is optional when creating or updating a record. If not present, nothing will be shown next the reporter's name.
+
 ```json
 {
-    // This ID is used for updating posts only. It is ignored when adding a new report.
-    "id": Option<92811>,
-
-    // This is used purely for admin reference to arbitrary internal IDs, and isn't publically visible.
+    "id": 92811,
     "reference_id": 1,
-
     "affected_service": "Some System",
-
-    // Submitted in the form of Y-M-D and is optional. The current date is used when not provided.
-    "date": Option<"2019-8-24">,
+    "date": "2019-08-24",
     "summary": "An issue...",
     "reporter": "Somebody",
-    "reporter_handle": Option<"@Maybe">,
+    "reporter_handle": "@Maybe",
 }
 ```
 
