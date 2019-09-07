@@ -3,7 +3,7 @@
 
 use askama::Template;
 use bincode;
-use chrono::NaiveDate;
+use chrono::{Datelike, NaiveDate};
 use lazy_static::lazy_static;
 use serde::{Serialize, Deserialize};
 use sled::Db;
@@ -14,6 +14,8 @@ use log::info;
 use flexi_logger::{Duplicate, Logger};
 
 use std::{fmt, fs, error::Error};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::net::IpAddr;
 
 #[derive(Debug, Deserialize)]
@@ -37,10 +39,11 @@ struct Config {
     admin_keys: Option<Vec<AdminKey>>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Hash)]
 pub struct HallEntry {
     // This ID is randomly assigned and used for updates/deletions
     id: u64,
+    anchor_key: Option<String>,
     // This ID is submitted by the user for linking to reports, incidents, etc. 
     reference_id: u64,
     affected_service: String,
@@ -49,6 +52,17 @@ pub struct HallEntry {
     reporter: String,
     // This allows for a user to specify a handle, Twitter profile, etc to be displayed by their name.
     reporter_handle: Option<String>,
+}
+
+impl HallEntry {
+    pub fn generate_anchor(&mut self) {
+        let mut c_hasher = DefaultHasher::new();
+        self.hash(&mut c_hasher);
+        let hash = c_hasher.finish();
+        
+        // The anchors will end up similar to #2019-5B2CBFE78ED4BD69
+        self.anchor_key = Some(format!("{}-{:X}", self.date.year(), hash))
+    }
 }
 
 // This is the data that is needed in a POST to create a new record
@@ -104,8 +118,8 @@ impl fmt::Display for HallError {
 
 #[derive(Debug, Template)]
 #[template(path = "report_list.html")]
-struct ReportList<'r> {
-    project_name: &'r str,
+struct ReportList<'a> {
+    project_name: &'a str,
     reports: Vec<HallEntry>,
 }
 
@@ -142,7 +156,7 @@ fn main() {
     info!("Starting Hall of Fame...");
     info!("Project name set to: {}", &CONFIG.project_name);
 
-    // Pre-initalize the database for ~500ms faster first load
+    // Pre-initalize the database for about a ~500ms faster first load
     RECORD_DB.get("_").unwrap();
 
     let main_page = warp::path::end().map(||
@@ -226,7 +240,7 @@ fn generate_record_page(db: &Db, config: &Config) -> String {
 }
 
 pub fn list_records(record_db: &Db) -> Vec<HallEntry> {
-    let mut decoded_records: Vec<HallEntry> = Vec::new();
+    let mut decoded_records: Vec<HallEntry> = Vec::with_capacity(10);
 
     let all_records = record_db.scan_prefix("SI-");
     for report in all_records.values() {

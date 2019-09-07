@@ -1,6 +1,6 @@
 [package]
 name = "security_hall"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["BlackHoleFox <blackholefoxdev@gmail.com>"]
 edition = "2018"
 

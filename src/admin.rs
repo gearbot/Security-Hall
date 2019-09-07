@@ -24,8 +24,9 @@ pub fn add_record(new_record: RecordSubmission, user: &AdminKey, record_db: &Db)
         None => Utc::today().naive_utc()
     };
 
-    let formed_record = HallEntry {
+    let mut formed_record = HallEntry {
         id: new_id,
+        anchor_key: None,
         reference_id: new_record.reference_id,
         affected_service: new_record.affected_service,
         date: record_date,
@@ -33,6 +34,8 @@ pub fn add_record(new_record: RecordSubmission, user: &AdminKey, record_db: &Db)
         reporter: new_record.reporter,
         reporter_handle: new_record.reporter_handle
     };
+
+    formed_record.generate_anchor();
 
     let encoded_record = bincode::serialize(&formed_record).unwrap();
     record_db.insert(key, encoded_record).unwrap();
@@ -72,6 +75,10 @@ pub fn update_record(updated_record: RecordSubmission, user: &AdminKey, record_d
                 let err_msg = "The provided ID and the record's current ID do not match, try again!";
                 return generate_response(err_msg, StatusCode::BAD_REQUEST)
             }
+            
+            // We do *not* update the anchor key, so updated records can be still found using existing links.
+            // As the IDs assigned are guaranteed to be unique, it is impossible for a record
+            // added later to end up with the same anchor value, as the hash would differ due to the ID difference.
 
             // Maybe allow the user to only send what fields they want updated?
             let new_record = bincode::serialize(&HallEntry {

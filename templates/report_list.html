@@ -8,8 +8,11 @@
 {% if reports.len() != 0 %}
     <div id="reportList">
         {% for report in reports %}
-            <div class="report">
-                <h4 class="date">{{ report.date }}</h4>
+            {% let anchor = report.anchor_key.as_ref().unwrap() %}
+            <div class="report" id={{ anchor }}>
+                <h4 class="date">
+                    <a href=#{{ anchor }}>{{ report.date }}</a>
+                </h4>
                 <p class="affectedService"> Affected: {{ report.affected_service }}</p>
 
                 {% match report.reporter_handle %}
@@ -26,3 +29,12 @@
 {% else %}
     <h3>There hasn't been any reports submitted! Hopefully that's a good thing.</h3>
 {% endif %}
+
+<script type="text/javascript">
+    function sDiv() {
+        if (!location.hash.length || !document.getElementById(location.hash)) { 
+            return 
+        }
+    }
+    sDiv();
+</script>
