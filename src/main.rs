@@ -247,6 +247,8 @@ pub fn list_records(record_db: &Db) -> Vec<HallEntry> {
         decoded_records.push(bincode::deserialize(&report.unwrap()).unwrap())
     }
 
+    // Show the newest records (by date) on the page first
+    decoded_records.sort_unstable_by(|a, b| b.date.cmp(&a.date));
     decoded_records
 }
 
